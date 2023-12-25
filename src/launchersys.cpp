@@ -11,6 +11,7 @@
 #include "constants.h"
 #include "amdbuslauncherinterface.h"
 #include "amdbusdockinterface.h"
+#include "aminterface.h"
 
 #define SessionManagerService "org.deepin.dde.SessionManager1"
 #define SessionManagerPath "/org/deepin/dde/SessionManager1"
@@ -46,9 +47,13 @@ LauncherSys::LauncherSys(QObject *parent)
 
     // 插件加载
     m_launcherPlugin->startLoader();
-
-    connect(m_amDbusLauncher, &AMDBusLauncherInter::FullscreenChanged, this, &LauncherSys::displayModeChanged, Qt::QueuedConnection);
-    connect(m_amDbusLauncher, &AMDBusLauncherInter::DisplayModeChanged, this, &LauncherSys::onDisplayModeChanged, Qt::QueuedConnection);
+    if (AMInter::isAMReborn()) {
+        connect(AMInter::instance(), &AMInter::fullScreenChanged, this, &LauncherSys::displayModeChanged, Qt::QueuedConnection);
+        connect(AMInter::instance(), &AMInter::displayModeChanged, this, &LauncherSys::displayModeChanged, Qt::QueuedConnection);
+    } else {
+        connect(m_amDbusLauncher, &AMDBusLauncherInter::FullscreenChanged, this, &LauncherSys::displayModeChanged, Qt::QueuedConnection);
+        connect(m_amDbusLauncher, &AMDBusLauncherInter::DisplayModeChanged, this, &LauncherSys::onDisplayModeChanged, Qt::QueuedConnection);
+    }
 
     connect(m_amDbusDockInter, &AMDBusDockInter::FrontendWindowRectChanged, this, &LauncherSys::onFrontendRectChanged);
 
@@ -114,8 +119,10 @@ bool LauncherSys::visible()
 void LauncherSys::displayModeChanged()
 {
     LauncherInterface *lastLauncher = m_launcherInter;
-    if (m_launcherInter)
-        m_calcUtil->setFullScreen(m_amDbusLauncher->fullscreen());
+    if (m_launcherInter) {
+        bool isFullScreen = AMInter::isAMReborn() ? AMInter::instance()->fullScreen() : m_amDbusLauncher->fullscreen();
+        m_calcUtil->setFullScreen(isFullScreen);
+    }
 
     if (m_calcUtil->fullscreen()) {
         if (!m_fullLauncher) {
@@ -200,7 +207,8 @@ void LauncherSys::unRegisterRegion()
 void LauncherSys::onDisplayModeChanged()
 {
     if (m_fullLauncher) {
-        m_fullLauncher->updateDisplayMode(m_amDbusLauncher->displaymode());
+        int displayMode = AMInter::isAMReborn() ? AMInter::instance()->displayMode() : m_amDbusLauncher->displaymode();
+        m_fullLauncher->updateDisplayMode(displayMode);
     }
 }
 
@@ -215,6 +223,9 @@ void LauncherSys::onFrontendRectChanged()
 
 void LauncherSys::onButtonPress(const QPoint &p, const int flag)
 {
+    if (!m_launcherInter->visible())
+        return;
+
     m_launcherInter->regionMonitorPoint(p, flag);
 }
 
